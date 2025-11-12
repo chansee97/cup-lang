@@ -1,0 +1,10 @@
+// 数组、对象、属性/下标访问
+let nums = [1, 2, 3, 4];
+let person = { name: 'Alice', age: 30 };
+
+print('len(nums) =', len(nums));
+print('person.name =', person.name, 'age =', person.age);
+print('nums[2] =', nums[2]);
+print('"hi"[1] =', "hi"[1]);
+print('keys(person) =', keys(person));
+

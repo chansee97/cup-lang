@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MiniScript Playground</title>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <style>
+    :root { --left-width: 60%; --accent: #4f8cff; --bg: #0f1115; --panel: #151822; --text: #e6e6e6; --muted: #97a0af; }
+    html,body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #222834; align-items: center; background: linear-gradient(180deg,#141a24,#0f1115); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    .title { font-weight: 600; margin-right: 12px; color: #fff; }
+    .spacer { flex: 1; }
+    .container { display: grid; grid-template-columns: var(--left-width) 6px 1fr; height: calc(100% - 46px); }
+    #editor { border-right: 1px solid #222834; }
+    #divider { background: #1e2430; cursor: col-resize; }
+    #right { display: flex; flex-direction: column; background: var(--panel); }
+    #output { flex: 1; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow: auto; background: #0e1220; border-left: 1px solid #222834; }
+    button { padding: 8px 14px; background: var(--accent); border: 0; color: #fff; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    button:active { transform: translateY(1px); }
+    .ghost { background: transparent; color: var(--muted); border: 1px solid #283044; }
+    #status { color: var(--muted); }
+    .hint { margin-left: 8px; color: var(--muted); font-size: 12px; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+  <script src="./miniscript.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="title">MiniScript Playground</div>
+    <button id="runBtn">运行</button>
+    <button id="clearBtn" class="ghost">清空输出</button>
+    <span class="hint">Ctrl/Cmd + Enter 运行</span>
+    <div class="spacer"></div>
+    <span id="status"></span>
+  </div>
+  <div class="container">
+    <div id="editor"></div>
+    <div id="divider"></div>
+    <div id="right">
+      <div id="output"></div>
+    </div>
+  </div>
+  <script>
+    const initialCode = `// MiniScript Playground\n// 试试运行：\nfun fib(n) {\n  if (n <= 1) return n;\n  return fib(n - 1) + fib(n - 2);\n}\n\nlet nums = [1,2,3];\nlet person = { name: 'Alice', age: 30 };\nprint('fib(10)=', fib(10));\nprint('len(nums)=', len(nums));\nprint('person.name=', person.name);\n`;
+
+    const outputEl = document.getElementById('output');
+    const statusEl = document.getElementById('status');
+    const runBtn = document.getElementById('runBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    let editor = null;
+
+    function writeOut(...args){
+      outputEl.textContent += args.join(' ') + '\n';
+    }
+    function clearOut(){ outputEl.textContent = ''; }
+
+    function runNow(){
+      clearOut();
+      const src = editor ? editor.getValue() : initialCode;
+      const t0 = performance.now();
+      statusEl.textContent = '';
+      try {
+        MiniScript.execute(src, { print: { call: (_i,args)=>{ writeOut(...args); return null; }, arity: ()=>null } });
+        const dt = Math.max(0, Math.round(performance.now() - t0));
+        statusEl.textContent = `运行完成 ${dt}ms`;
+      } catch(e) {
+        writeOut(String(e && e.message ? e.message : e));
+        statusEl.textContent = '发生错误';
+      }
+    }
+
+    runBtn.addEventListener('click', runNow);
+    clearBtn.addEventListener('click', clearOut);
+    window.addEventListener('keydown', (ev)=>{ if ((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='enter') runNow(); });
+    statusEl.textContent = '编辑器加载中...';
+
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], function(){
+      monaco.languages.register({ id: 'miniscript' });
+      monaco.languages.setMonarchTokensProvider('miniscript', {
+        keywords: ['let','fun','if','else','while','return','true','false','null'],
+        operators: ['==','!=','<=','>=','&&','||','+','-','*','/','%','<','>','!','='],
+        tokenizer: {
+          root: [
+            [/\/\/.*$/, 'comment'],
+            [/\/\*[\s\S]*?\*\//, 'comment'],
+            [/"([^"\\]|\\.)*"/, 'string'],
+            [/'([^'\\]|\\.)*'/, 'string'],
+            [/\d+\.\d+|\d+/, 'number'],
+            [/[a-zA-Z_$][\w$]*/, { cases: { '@keywords': 'keyword', '@default':'identifier' } }],
+            [/==|!=|<=|>=|&&|\|\||[\+\-\*\/%<>=!]/, 'operator'],
+            [/\{|\}|\(|\)|\[|\]|\.|,|;|:/, 'delimiter']
+          ]
+        }
+      });
+      monaco.languages.registerCompletionItemProvider('miniscript', {
+        provideCompletionItems: () => {
+          const keywords = ['let','fun','if','else','while','return','true','false','null'];
+          const builtins = ['print','len','clock','type','keys'];
+          const suggestions = [
+            ...keywords.map(k=>({ label: k, kind: monaco.languages.CompletionItemKind.Keyword, insertText: k })),
+            ...builtins.map(k=>({ label: k, kind: monaco.languages.CompletionItemKind.Function, insertText: k })),
+            { label: 'fun (…) {}', kind: monaco.languages.CompletionItemKind.Snippet, insertText: 'fun ${1:name}(${2:args}) {\n  ${3:// body}\n}', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet }
+          ];
+          return { suggestions };
+        }
+      });
+      editor = monaco.editor.create(document.getElementById('editor'), {
+        value: initialCode,
+        language: 'miniscript',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        minimap: { enabled: false }
+      });
+      statusEl.textContent = '已就绪 (Ctrl/Cmd+Enter 运行)';
+
+      const divider = document.getElementById('divider');
+      let dragging = false;
+      divider.addEventListener('mousedown', ()=>{ dragging = true; document.body.style.cursor='col-resize'; });
+      window.addEventListener('mouseup', ()=>{ dragging = false; document.body.style.cursor=''; });
+      window.addEventListener('mousemove', (e)=>{
+        if(!dragging) return;
+        const total = document.querySelector('.container').clientWidth;
+        const left = Math.min(Math.max(200, e.clientX), total-200);
+        const percent = (left/total)*100;
+        document.documentElement.style.setProperty('--left-width', percent.toFixed(2)+'%');
+      });
+    });
+  </script>
+</body>
+</html>

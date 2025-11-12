@@ -1,0 +1,14 @@
+// 变量、循环与条件
+let sum = 0;
+let i = 0;
+while (i < 10) {
+  sum = sum + i;
+  i = i + 1;
+}
+
+if (sum == 45) {
+  print('sum ok =', sum);
+} else {
+  print('sum error =', sum);
+}
+
